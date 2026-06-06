@@ -19,7 +19,7 @@ workflows:
 
     scripts:
       - name: Set Gradle permissions
-        script: chmod +x android/gradlew
+        script: chmod +x gradlew
 
       - name: Build debug APK
         script: |
@@ -59,7 +59,7 @@ workflows:
 
     scripts:
       - name: Set Gradle permissions
-        script: chmod +x android/gradlew
+        script: chmod +x gradlew
 
       - name: Decode keystore
         script: |
