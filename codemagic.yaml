@@ -1,0 +1,164 @@
+workflows:
+
+  # ── Android Debug APK ─────────────────────────────────────────────────────
+  android-debug:
+    name: Sacred Path Android — Debug APK
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      java: 17
+      node: 20.11.0
+
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: develop
+          include: true
+        - pattern: feature/*
+          include: true
+
+    scripts:
+      - name: Set Gradle permissions
+        script: chmod +x android/gradlew
+
+      - name: Build debug APK
+        script: |
+          cd android
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" \
+            -PAPI_BIBLE_KEY="${API_BIBLE_KEY:-}"
+
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
+
+    publishing:
+      email:
+        recipients: [dev@sacredpath.app]
+        notify: { success: true, failure: true }
+
+  # ── Android Release AAB (Play Store) ──────────────────────────────────────
+  android-release:
+    name: Sacred Path Android — Release AAB
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+    environment:
+      groups: [sacred_path_android]
+      vars:
+        PACKAGE_NAME: com.sacredpath.app
+      java: 17
+
+    triggering:
+      events: [push, tag]
+      branch_patterns:
+        - pattern: main
+          include: true
+        - pattern: release/*
+          include: true
+
+    scripts:
+      - name: Set Gradle permissions
+        script: chmod +x android/gradlew
+
+      - name: Decode keystore
+        script: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode \
+            > android/app/sacred-path.keystore
+
+      - name: Build release AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease \
+            --no-daemon \
+            --stacktrace \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" \
+            -PAPI_BIBLE_KEY="${API_BIBLE_KEY}" \
+            -PKEYSTORE_PATH="${CM_BUILD_DIR}/android/app/sacred-path.keystore" \
+            -PKEYSTORE_PASSWORD="${KEYSTORE_PASSWORD}" \
+            -PKEY_ALIAS="${KEY_ALIAS}" \
+            -PKEY_PASSWORD="${KEY_PASSWORD}"
+
+      - name: Build release APK
+        script: |
+          cd android
+          ./gradlew assembleRelease \
+            --no-daemon \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" \
+            -PAPI_BIBLE_KEY="${API_BIBLE_KEY}" \
+            -PKEYSTORE_PATH="${CM_BUILD_DIR}/android/app/sacred-path.keystore" \
+            -PKEYSTORE_PASSWORD="${KEYSTORE_PASSWORD}" \
+            -PKEY_ALIAS="${KEY_ALIAS}" \
+            -PKEY_PASSWORD="${KEY_PASSWORD}"
+
+    artifacts:
+      - android/app/build/outputs/bundle/release/*.aab
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/mapping/release/mapping.txt
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: true
+      email:
+        recipients: [dev@sacredpath.app]
+        notify: { success: true, failure: true }
+
+  # ── iOS Release IPA ────────────────────────────────────────────────────────
+  ios-release:
+    name: Sacred Path iOS — Release IPA
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+    environment:
+      groups: [sacred_path_ios]
+      vars:
+        BUNDLE_ID: com.sacredpath.app
+        XCODE_SCHEME: SacredPath
+      xcode: latest
+      cocoapods: default
+
+    triggering:
+      events: [push, tag]
+      branch_patterns:
+        - pattern: main
+          include: true
+        - pattern: release/*
+          include: true
+
+    scripts:
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files $BUNDLE_ID \
+            --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Increment build number
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number \
+            $BUNDLE_ID 2>/dev/null || echo "0")
+          xcrun agvtool new-version -all $((LATEST + 1))
+
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace ios/SacredPath.xcworkspace \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+        beta_groups: [Sacred Path Testers]
+      email:
+        recipients: [dev@sacredpath.app]
+        notify: { success: true, failure: true }

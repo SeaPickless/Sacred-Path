@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SacredPath" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.SacredPath.SplashScreen" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#7B2D3E</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.SacredPath</item>
+    </style>
+</resources>

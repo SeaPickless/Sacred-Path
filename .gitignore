@@ -1,0 +1,22 @@
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.jks
+*.keystore
+google-service-account.json
+
+# Fonts (download from Google Fonts — see README)
+app/src/main/res/font/*.ttf
+
+# Secrets
+.env
+local.properties
